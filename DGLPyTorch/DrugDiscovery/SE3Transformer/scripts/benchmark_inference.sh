@@ -4,12 +4,25 @@
 # CLI args with defaults
 BATCH_SIZE=${1:-240}
 AMP=${2:-true}
+PROFILE_DIR=${3:-}
 
-CUDA_VISIBLE_DEVICES=0 python -m se3_transformer.runtime.inference \
-  --amp "$AMP" \
-  --batch_size "$BATCH_SIZE" \
-  --use_layer_norm \
-  --norm \
-  --task homo \
-  --seed 42 \
-  --benchmark
+if [ -n "$PROFILE_DIR" ]; then
+  CUDA_VISIBLE_DEVICES=0 python -m se3_transformer.runtime.inference \
+    --amp "$AMP" \
+    --batch_size "$BATCH_SIZE" \
+    --use_layer_norm \
+    --norm \
+    --task homo \
+    --seed 42 \
+    --benchmark \
+    --profile_dir "$PROFILE_DIR"
+else
+  CUDA_VISIBLE_DEVICES=0 python -m se3_transformer.runtime.inference \
+    --amp "$AMP" \
+    --batch_size "$BATCH_SIZE" \
+    --use_layer_norm \
+    --norm \
+    --task homo \
+    --seed 42 \
+    --benchmark
+fi

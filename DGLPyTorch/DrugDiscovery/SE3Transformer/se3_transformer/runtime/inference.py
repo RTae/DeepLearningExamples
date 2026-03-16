@@ -87,8 +87,12 @@ if __name__ == '__main__':
 
     major_cc, minor_cc = torch.cuda.get_device_capability()
 
-    loggers = [DLLogger(save_dir=args.log_dir, filename=args.dllogger_name)]
-    if args.wandb:
+    profiling_enabled = args.profile_dir is not None
+    if profiling_enabled:
+        args.profile_dir.mkdir(parents=True, exist_ok=True)
+
+    loggers = [] if profiling_enabled else [DLLogger(save_dir=args.log_dir, filename=args.dllogger_name)]
+    if args.wandb and not profiling_enabled:
         loggers.append(WandbLogger(name=f'QM9({args.task})', save_dir=args.log_dir, project='se3-transformer'))
     logger = LoggerCollection(loggers)
     datamodule = QM9DataModule(**vars(args))
@@ -116,27 +120,38 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
 
     test_dataloader = datamodule.test_dataloader() if not args.benchmark else datamodule.train_dataloader()
-    if not args.benchmark:
-        evaluate(model,
-                 test_dataloader,
-                 callbacks,
-                 args)
+    profiler = None
+    if profiling_enabled:
+        profiler = torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU,
+                                                      torch.profiler.ProfilerActivity.CUDA])
+        profiler.__enter__()
 
-        for callback in callbacks:
-            callback.on_validation_end()
-
-    else:
-        world_size = dist.get_world_size() if dist.is_initialized() else 1
-        callbacks = [PerformanceCallback(
-            logger, args.batch_size * world_size,
-            warmup_epochs=1 if args.epochs > 1 else 0,
-            mode='inference'
-        )]
-        for _ in range(args.epochs):
+    try:
+        if not args.benchmark:
             evaluate(model,
                      test_dataloader,
                      callbacks,
                      args)
-            callbacks[0].on_epoch_end()
 
-        callbacks[0].on_fit_end()
+            for callback in callbacks:
+                callback.on_validation_end()
+
+        else:
+            world_size = dist.get_world_size() if dist.is_initialized() else 1
+            callbacks = [PerformanceCallback(
+                logger, args.batch_size * world_size,
+                warmup_epochs=1 if args.epochs > 1 else 0,
+                mode='inference'
+            )]
+            for _ in range(args.epochs):
+                evaluate(model,
+                         test_dataloader,
+                         callbacks,
+                         args)
+                callbacks[0].on_epoch_end()
+
+            callbacks[0].on_fit_end()
+    finally:
+        if profiler is not None:
+            profiler.__exit__(None, None, None)
+            profiler.export_chrome_trace(str(args.profile_dir / 'trace.json'))
