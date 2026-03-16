@@ -20,6 +20,7 @@
 #
 # SPDX-FileCopyrightText: Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES
 # SPDX-License-Identifier: MIT
+import logging
 from typing import Tuple
 
 import dgl
@@ -153,11 +154,23 @@ class CachedBasesQM9EdgeDataset(QM9EdgeDataset):
         dataloader = DataLoader(self, shuffle=False, batch_size=self.batch_size, num_workers=self.num_workers,
                                 collate_fn=lambda samples: dgl.batch([sample[0] for sample in samples]))
         bases = []
+        use_cuda_for_bases = torch.cuda.is_available()
         for i, graph in tqdm(enumerate(dataloader), total=len(dataloader), desc='Precomputing QM9 bases',
                              disable=get_local_rank() != 0):
             rel_pos = _get_relative_pos(graph)
-            # Compute the bases with the GPU but convert the result to CPU to store in RAM
-            bases.append({k: v.cpu() for k, v in get_basis(rel_pos.cuda(), **self.bases_kwargs).items()})
+            # Compute bases on GPU when available, but gracefully fall back to CPU if NVRTC
+            # does not support the current architecture (e.g., newer GPUs with older CUDA stack).
+            basis_input = rel_pos.cuda(non_blocking=True) if use_cuda_for_bases else rel_pos
+            try:
+                basis_values = get_basis(basis_input, **self.bases_kwargs)
+            except RuntimeError as error:
+                if use_cuda_for_bases and 'nvrtc' in str(error) and 'gpu-architecture' in str(error):
+                    logging.warning('Falling back to CPU basis precompute due to unsupported CUDA architecture')
+                    use_cuda_for_bases = False
+                    basis_values = get_basis(rel_pos, **self.bases_kwargs)
+                else:
+                    raise
+            bases.append({k: v.cpu() for k, v in basis_values.items()})
         self.bases = bases  # Assign at the end so that __getitem__ isn't confused
 
     def __getitem__(self, idx: int):

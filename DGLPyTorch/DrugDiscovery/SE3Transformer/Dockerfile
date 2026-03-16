@@ -24,7 +24,7 @@
 # run docker daemon with --default-runtime=nvidia for GPU detection during build
 # multistage build for DGL with CUDA and FP16
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:23.01-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:25.01-py3
 
 FROM ${FROM_IMAGE_NAME} AS dgl_builder
 
@@ -36,8 +36,12 @@ WORKDIR /dgl
 RUN git clone --branch 1.0.0 --recurse-submodules --depth 1 https://github.com/dmlc/dgl.git .
 WORKDIR build
 RUN export NCCL_ROOT=/usr \
+    && export CFLAGS="${CFLAGS} -Wno-error=deprecated-declarations" \
+    && export CXXFLAGS="${CXXFLAGS} -Wno-error=deprecated-declarations" \
     && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release \
-        -DUSE_CUDA=ON -DCUDA_ARCH_BIN="60 70 80" -DCUDA_ARCH_PTX="80" \
+        -DCMAKE_C_FLAGS="-Wno-error=deprecated-declarations" \
+        -DCMAKE_CXX_FLAGS="-Wno-error=deprecated-declarations" \
+        -DUSE_CUDA=ON -DCUDA_ARCH_BIN="80 90 120" -DCUDA_ARCH_PTX="120" \
         -DCUDA_ARCH_NAME="Manual" \
         -DUSE_FP16=ON \
         -DBUILD_TORCH=ON \
