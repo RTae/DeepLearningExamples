@@ -37,6 +37,8 @@ paths.add_argument('--log_dir', type=pathlib.Path, default=pathlib.Path('./resul
                    help='Directory where the results logs should be saved')
 paths.add_argument('--dllogger_name', type=str, default='dllogger_results.json',
                    help='Name for the resulting DLLogger JSON file')
+paths.add_argument('--profile_dir', type=pathlib.Path, default=None,
+                   help='Directory where torch profiler traces should be saved')
 paths.add_argument('--save_ckpt_path', type=pathlib.Path, default=None,
                    help='File where the checkpoint should be saved')
 paths.add_argument('--load_ckpt_path', type=pathlib.Path, default=None,
@@ -49,7 +51,7 @@ optimizer.add_argument('--min_learning_rate', '--min_lr', dest='min_learning_rat
 optimizer.add_argument('--momentum', type=float, default=0.9)
 optimizer.add_argument('--weight_decay', type=float, default=0.1)
 
-PARSER.add_argument('--epochs', type=int, default=100, help='Number of training epochs')
+PARSER.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
 PARSER.add_argument('--batch_size', type=int, default=240, help='Batch size')
 PARSER.add_argument('--seed', type=int, default=None, help='Set a seed globally')
 PARSER.add_argument('--num_workers', type=int, default=8, help='Number of dataloading workers')
