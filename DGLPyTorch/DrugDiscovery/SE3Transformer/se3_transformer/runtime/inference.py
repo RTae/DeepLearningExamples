@@ -155,3 +155,24 @@ if __name__ == '__main__':
         if profiler is not None:
             profiler.__exit__(None, None, None)
             profiler.export_chrome_trace(str(args.profile_dir / 'trace.json'))
+
+            key_averages = profiler.key_averages()
+
+            def _write_profiler_table(filename: str, sort_keys: List[str], row_limit: int = 30):
+                table = None
+                for sort_key in sort_keys:
+                    try:
+                        table = key_averages.table(sort_by=sort_key, row_limit=row_limit)
+                        break
+                    except Exception:
+                        continue
+
+                if table is None:
+                    table = 'Profiler table unavailable for requested sort keys: ' + ', '.join(sort_keys)
+
+                with open(args.profile_dir / filename, 'w') as f:
+                    f.write(table)
+
+            _write_profiler_table('top_cuda_total.txt', ['cuda_time_total'])
+            _write_profiler_table('top_cuda_self.txt', ['self_cuda_time_total'])
+            _write_profiler_table('top_memory.txt', ['self_cuda_memory_usage', 'cuda_memory_usage'])
