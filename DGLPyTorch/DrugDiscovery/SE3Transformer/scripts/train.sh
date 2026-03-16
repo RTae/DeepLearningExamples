@@ -3,7 +3,7 @@
 # CLI args with defaults
 BATCH_SIZE=${1:-240}
 AMP=${2:-true}
-NUM_EPOCHS=${3:-100}
+NUM_EPOCHS=${3:-10}
 LEARNING_RATE=${4:-0.002}
 WEIGHT_DECAY=${5:-0.1}
 

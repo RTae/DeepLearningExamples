@@ -139,26 +139,32 @@ class SE3Transformer(nn.Module):
     def forward(self, graph: DGLGraph, node_feats: Dict[str, Tensor],
                 edge_feats: Optional[Dict[str, Tensor]] = None,
                 basis: Optional[Dict[str, Tensor]] = None):
-        # Compute bases in case they weren't precomputed as part of the data loading
-        basis = basis or get_basis(graph.edata['rel_pos'], max_degree=self.max_degree, compute_gradients=False,
-                                   use_pad_trick=self.tensor_cores and not self.low_memory,
-                                   amp=torch.is_autocast_enabled())
+        with torch.profiler.record_function("se3_core.forward"):
+            with torch.profiler.record_function("se3_core.basis_prep"):
+                # Compute bases in case they weren't precomputed as part of the data loading
+                basis = basis or get_basis(graph.edata['rel_pos'], max_degree=self.max_degree, compute_gradients=False,
+                                           use_pad_trick=self.tensor_cores and not self.low_memory,
+                                           amp=torch.is_autocast_enabled())
 
-        # Add fused bases (per output degree, per input degree, and fully fused) to the dict
-        basis = update_basis_with_fused(basis, self.max_degree, use_pad_trick=self.tensor_cores and not self.low_memory,
-                                        fully_fused=self.fuse_level == ConvSE3FuseLevel.FULL)
+                # Add fused bases (per output degree, per input degree, and fully fused) to the dict
+                basis = update_basis_with_fused(basis, self.max_degree,
+                                                use_pad_trick=self.tensor_cores and not self.low_memory,
+                                                fully_fused=self.fuse_level == ConvSE3FuseLevel.FULL)
 
-        edge_feats = get_populated_edge_features(graph.edata['rel_pos'], edge_feats)
+            with torch.profiler.record_function("se3_core.input_proj"):
+                edge_feats = get_populated_edge_features(graph.edata['rel_pos'], edge_feats)
 
-        node_feats = self.graph_modules(node_feats, edge_feats, graph=graph, basis=basis)
+            with torch.profiler.record_function("se3_core.block_stack"):
+                node_feats = self.graph_modules(node_feats, edge_feats, graph=graph, basis=basis)
 
-        if self.pooling is not None:
-            return self.pooling_module(node_feats, graph=graph)
+            with torch.profiler.record_function("se3_core.output_proj"):
+                if self.pooling is not None:
+                    return self.pooling_module(node_feats, graph=graph)
 
-        if self.return_type is not None:
-            return node_feats[str(self.return_type)]
+                if self.return_type is not None:
+                    return node_feats[str(self.return_type)]
 
-        return node_feats
+                return node_feats
 
     @staticmethod
     def add_argparse_args(parser):

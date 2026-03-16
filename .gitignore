@@ -1,3 +1,4 @@
 repos.cfg
 repos_init.cfg
 nvtool*
+DGLPyTorch/DrugDiscovery/SE3Transformer/model_qm9.pth
